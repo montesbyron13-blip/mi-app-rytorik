@@ -1,1 +1,0 @@
-Esta es una versión APK para instalar en cualquier entorno
