@@ -2,7 +2,7 @@ import flet as ft
 from datetime import datetime, date
 import urllib.parse
 
-# ---------- Funciones de cálculo ----------
+# Funciones de cálculo
 def calcular_local(com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos):
     ventas_efectivo = com_fisicas - pos
     efectivo_ideal = ventas_efectivo + caja_ini - salidas
@@ -19,7 +19,7 @@ def calcular_total(pos_ventas, fondo_ini, salidas_total, caja_contada, pedidos_y
 
 def generar_html_ticket(datos_local, datos_total, fecha_hora):
     now_str = fecha_hora.strftime("%d/%m/%Y %H:%M:%S")
-    html = f"""
+    return f"""
     <html>
     <head><meta charset="UTF-8"><style>
         @media print {{ body {{ margin: 0; padding: 0; }} }}
@@ -72,59 +72,48 @@ def generar_html_ticket(datos_local, datos_total, fecha_hora):
     </body>
     </html>
     """
-    return html
 
-# ---------- APP PRINCIPAL ----------
 def main(page: ft.Page):
-    # Configuración responsiva
     page.title = "💰 Cierre de Caja"
     page.padding = 10
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
-    page.window_max_width = 500  # En escritorio se ve como móvil
+    page.window_max_width = 500
     page.window_center()
 
-    # ---- Fecha seleccionada ----
     fecha_actual = date.today()
     fecha_text = ft.Text(fecha_actual.strftime("%d/%m/%Y"), size=14)
-
-    # ---- Reloj en vivo (intervalo 1s) ----
     reloj_text = ft.Text("", size=18, weight=ft.FontWeight.BOLD)
 
     def actualizar_reloj(e):
-        ahora = datetime.now()
-        reloj_text.value = f"🕒 {ahora.strftime('%d/%m/%Y %H:%M:%S')} (hora local)"
+        reloj_text.value = f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
         page.update()
-
     page.add_interval(1000, actualizar_reloj)
 
-    # ---- Selector de fecha ----
-    def fecha_cambiada(e):
+    date_picker = ft.DatePicker(
+        first_date=datetime(2020, 1, 1),
+        last_date=datetime(2030, 12, 31),
+        on_change=lambda e: actualizar_fecha(e)
+    )
+    page.overlay.append(date_picker)
+
+    def actualizar_fecha(e):
         nonlocal fecha_actual
         if date_picker.value:
             fecha_actual = date_picker.value
             fecha_text.value = fecha_actual.strftime("%d/%m/%Y")
             page.update()
 
-    date_picker = ft.DatePicker(
-        first_date=datetime(2020, 1, 1),
-        last_date=datetime(2030, 12, 31),
-        on_change=fecha_cambiada
-    )
-    page.overlay.append(date_picker)
-
     def mostrar_calendario(e):
         date_picker.pick_date()
 
-    # ---- Campos de entrada (todos con keyboard numérico) ----
-    # Locales
+    # Campos
     com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     pos = ft.TextField(label="POS", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     caja_ini = ft.TextField(label="Caja inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     salidas = ft.TextField(label="Salidas dinero", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     efectivo_cont = ft.TextField(label="Efectivo contado", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
-    # Totales
     pos_ventas = ft.TextField(label="POS + ventas efectivo", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     fondo_ini = ft.TextField(label="Fondo inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     salidas_total = ft.TextField(label="Salidas totales", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -132,7 +121,6 @@ def main(page: ft.Page):
     pedidos_ya = ft.TextField(label="Pedidos Ya", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos_total = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # Resultados (Text)
     local_ventas = ft.Text("0.00")
     local_ideal = ft.Text("0.00")
     local_diferencia = ft.Text("0.00")
@@ -142,7 +130,6 @@ def main(page: ft.Page):
     total_diferencia = ft.Text("0.00")
     total_estado = ft.Text("0.00")
 
-    # ---- Actualizar todos los cálculos ----
     def actualizar_todo(e):
         # Local
         try:
@@ -176,12 +163,10 @@ def main(page: ft.Page):
         except: pass
         page.update()
 
-    # Asignar evento a todos los campos
     for campo in [com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos,
                   pos_ventas, fondo_ini, salidas_total, caja_contada, pedidos_ya, depositos_total]:
         campo.on_change = actualizar_todo
 
-    # ---- Resets ----
     def reset_local(e):
         com_fisicas.value = "0"
         pos.value = "0"
@@ -200,7 +185,6 @@ def main(page: ft.Page):
         depositos_total.value = "0"
         actualizar_todo(e)
 
-    # ---- Copiar resultados al portapapeles ----
     def copiar_resultados(e):
         texto = f"""💰 CIERRE DE CAJA - {fecha_actual.strftime('%d/%m/%Y')} {datetime.now().strftime('%H:%M:%S')}
 
@@ -229,13 +213,11 @@ Diferencia: {total_diferencia.value}
 Estado cuentas: {total_estado.value}
 """
         page.set_clipboard(texto)
-        page.snack_bar = ft.SnackBar(ft.Text("Resultados copiados al portapapeles"))
+        page.snack_bar = ft.SnackBar(ft.Text("Resultados copiados"))
         page.snack_bar.open = True
         page.update()
 
-    # ---- Generar ticket HTML y abrir en navegador ----
     def generar_ticket(e):
-        # Obtener datos actuales
         cf = float(com_fisicas.value or 0)
         p = float(pos.value or 0)
         ci = float(caja_ini.value or 0)
@@ -266,93 +248,58 @@ Estado cuentas: {total_estado.value}
         }
         fecha_hora = datetime.combine(fecha_actual, datetime.now().time())
         html = generar_html_ticket(datos_local, datos_total, fecha_hora)
-
-        # Data URI para abrir en navegador
         data_uri = "data:text/html;charset=utf-8," + urllib.parse.quote(html)
         page.launch_url(data_uri)
-
-        page.snack_bar = ft.SnackBar(ft.Text("Ticket generado, se abrirá en el navegador"))
+        page.snack_bar = ft.SnackBar(ft.Text("Ticket generado"))
         page.snack_bar.open = True
         page.update()
 
-    # ---- Construcción de la interfaz responsiva ----
+    # Interfaz
     main_content = ft.SafeArea(
         expand=True,
         content=ft.Column(
             [
                 ft.Row([reloj_text], alignment=ft.MainAxisAlignment.CENTER),
-                ft.Row([
-                    ft.ElevatedButton("📅 Seleccionar fecha", on_click=mostrar_calendario, expand=True),
-                    ft.Text("Fecha: ", size=14),
-                    fecha_text,
-                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ft.Row([ft.ElevatedButton("📅 Seleccionar fecha", on_click=mostrar_calendario, expand=True),
+                        ft.Text("Fecha: "), fecha_text], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
                 ft.Divider(),
-                ft.Text("🏪 CIERRE DE CAJA LOCAL", size=20, weight=ft.FontWeight.BOLD),
-                ft.ResponsiveRow(
-                    [
-                        ft.Column(
-                            [com_fisicas, caja_ini, efectivo_cont, depositos],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                        ft.Column(
-                            [pos, salidas],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                    ],
-                ),
-                ft.ElevatedButton("🔄 Resetear Local", on_click=reset_local, expand=True),
+                ft.Text("🏪 CIERRE LOCAL", size=20, weight=ft.FontWeight.BOLD),
+                ft.ResponsiveRow([
+                    ft.Column([com_fisicas, caja_ini, efectivo_cont, depositos], col={"xs": 12, "sm": 6}),
+                    ft.Column([pos, salidas], col={"xs": 12, "sm": 6}),
+                ]),
+                ft.ElevatedButton("Reset Local", on_click=reset_local, expand=True),
                 ft.Text("Resultados Locales", size=16, weight=ft.FontWeight.BOLD),
-                ft.ResponsiveRow(
-                    [
-                        ft.Column([ft.Text("Ventas en efectivo:"), local_ventas], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Efectivo final (ideal):"), local_ideal], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Diferencia:"), local_diferencia], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Estado final en caja:"), local_estado], col={"xs": 12, "sm": 6}),
-                    ],
-                ),
+                ft.ResponsiveRow([
+                    ft.Column([ft.Text("Ventas efectivo:"), local_ventas], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Efectivo ideal:"), local_ideal], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Diferencia:"), local_diferencia], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Estado final:"), local_estado], col={"xs": 12, "sm": 6}),
+                ]),
                 ft.Divider(),
-                ft.Text("💳 CIERRE DE CAJA TOTAL", size=20, weight=ft.FontWeight.BOLD),
-                ft.ResponsiveRow(
-                    [
-                        ft.Column(
-                            [pos_ventas, fondo_ini, caja_contada, depositos_total],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                        ft.Column(
-                            [salidas_total, pedidos_ya],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                    ],
-                ),
-                ft.ElevatedButton("🔄 Resetear Total", on_click=reset_total, expand=True),
+                ft.Text("💳 CIERRE TOTAL", size=20, weight=ft.FontWeight.BOLD),
+                ft.ResponsiveRow([
+                    ft.Column([pos_ventas, fondo_ini, caja_contada, depositos_total], col={"xs": 12, "sm": 6}),
+                    ft.Column([salidas_total, pedidos_ya], col={"xs": 12, "sm": 6}),
+                ]),
+                ft.ElevatedButton("Reset Total", on_click=reset_total, expand=True),
                 ft.Text("Resultados Totales", size=16, weight=ft.FontWeight.BOLD),
-                ft.ResponsiveRow(
-                    [
-                        ft.Column([ft.Text("Ventas totales:"), total_ventas], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Caja ideal:"), total_ideal], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Diferencia:"), total_diferencia], col={"xs": 12, "sm": 6}),
-                        ft.Column([ft.Text("Estado final de cuentas:"), total_estado], col={"xs": 12, "sm": 6}),
-                    ],
-                ),
+                ft.ResponsiveRow([
+                    ft.Column([ft.Text("Ventas totales:"), total_ventas], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Caja ideal:"), total_ideal], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Diferencia:"), total_diferencia], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.Text("Estado cuentas:"), total_estado], col={"xs": 12, "sm": 6}),
+                ]),
                 ft.Divider(),
-                ft.ResponsiveRow(
-                    [
-                        ft.Column(
-                            [ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY, expand=True)],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                        ft.Column(
-                            [ft.ElevatedButton("🖨️ Generar Ticket HTML", on_click=generar_ticket, icon=ft.icons.PRINT, expand=True)],
-                            col={"xs": 12, "sm": 6},
-                        ),
-                    ],
-                ),
+                ft.ResponsiveRow([
+                    ft.Column([ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY, expand=True)], col={"xs": 12, "sm": 6}),
+                    ft.Column([ft.ElevatedButton("🖨️ Ticket HTML", on_click=generar_ticket, icon=ft.icons.PRINT, expand=True)], col={"xs": 12, "sm": 6}),
+                ]),
             ],
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
         ),
     )
-
     page.add(main_content)
     actualizar_todo(None)
 
