@@ -1,6 +1,11 @@
 import flet as ft
-from datetime import datetime, date
+from datetime import datetime
+import tempfile
+import urllib.parse
+from PIL import Image, ImageDraw, ImageFont
+import io
 
+# ----- Funciones de cálculo (iguales) -----
 def calcular_local(com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos):
     ventas_efectivo = com_fisicas - pos
     efectivo_ideal = ventas_efectivo + caja_ini - salidas
@@ -15,62 +20,140 @@ def calcular_total(pos_ventas, fondo_ini, salidas_total, caja_contada, pedidos_y
     estado_cuentas = caja_contada - depositos_total
     return ventas_totales, caja_ideal, diferencia, estado_cuentas
 
+# ----- Generar ticket HTML (formato térmico) -----
+def generar_html_ticket(datos_local, datos_total, fecha_hora):
+    now_str = fecha_hora.strftime("%d/%m/%Y %H:%M:%S")
+    html = f"""
+    <html>
+    <head><meta charset="UTF-8"><style>
+        @media print {{ body {{ margin: 0; padding: 0; }} }}
+        body {{ font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; margin: 0 auto; }}
+        .center {{ text-align: center; }}
+        .line {{ border-top: 1px dashed #000; margin: 5px 0; }}
+        table {{ width: 100%; }}
+        td {{ padding: 2px 0; }}
+        .right {{ text-align: right; }}
+        .title {{ font-weight: bold; font-size: 14px; margin: 5px 0; }}
+    </style></head>
+    <body>
+        <div class="center"><b>💰 CIERRE DE CAJA</b><br/>{now_str}</div>
+        <div class="line"></div>
+        <div class="title">🏪 CIERRE LOCAL</div>
+        <table>
+            <tr><td>Comandas físicas:</td><td class="right">{datos_local['com_fisicas']:,.2f}</td></tr>
+            <tr><td>POS:</td><td class="right">{datos_local['pos']:,.2f}</td></tr>
+            <tr><td>Caja inicial:</td><td class="right">{datos_local['caja_ini']:,.2f}</td></tr>
+            <tr><td>Salidas dinero:</td><td class="right">{datos_local['salidas']:,.2f}</td></tr>
+            <tr><td>Efectivo contado:</td><td class="right">{datos_local['efectivo_cont']:,.2f}</td></tr>
+            <tr><td>Depósitos:</td><td class="right">{datos_local['depositos']:,.2f}</td></tr>
+        </table>
+        <div class="line"></div>
+        <table>
+            <tr><td><b>Ventas efectivo:</b></td><td class="right"><b>{datos_local['ventas_efectivo']:,.2f}</b></td></tr>
+            <tr><td><b>Efectivo ideal:</b></td><td class="right"><b>{datos_local['efectivo_ideal']:,.2f}</b></td></tr>
+            <tr><td><b>Diferencia:</b></td><td class="right"><b>{datos_local['diferencia']:,.2f}</b></td></tr>
+            <tr><td><b>Estado final caja:</b></td><td class="right"><b>{datos_local['estado_final']:,.2f}</b></td></tr>
+        </table>
+        <div class="line"></div>
+        <div class="title">💳 CIERRE TOTAL</div>
+        <table>
+            <tr><td>POS + ventas efectivo:</td><td class="right">{datos_total['pos_ventas']:,.2f}</td></tr>
+            <tr><td>Fondo inicial:</td><td class="right">{datos_total['fondo_ini']:,.2f}</td></tr>
+            <tr><td>Salidas totales:</td><td class="right">{datos_total['salidas']:,.2f}</td></tr>
+            <tr><td>Caja contada:</td><td class="right">{datos_total['caja_contada']:,.2f}</td></tr>
+            <tr><td>Pedidos Ya:</td><td class="right">{datos_total['pedidos_ya']:,.2f}</td></tr>
+            <tr><td>Depósitos:</td><td class="right">{datos_total['depositos']:,.2f}</td></tr>
+        </table>
+        <div class="line"></div>
+        <table>
+            <tr><td><b>Ventas totales:</b></td><td class="right"><b>{datos_total['ventas_totales']:,.2f}</b></td></tr>
+            <tr><td><b>Caja ideal:</b></td><td class="right"><b>{datos_total['caja_ideal']:,.2f}</b></td></tr>
+            <tr><td><b>Diferencia:</b></td><td class="right"><b>{datos_total['diferencia']:,.2f}</b></td></tr>
+            <tr><td><b>Estado cuentas:</b></td><td class="right"><b>{datos_total['estado_cuentas']:,.2f}</b></td></tr>
+        </table>
+        <div class="line"></div>
+        <div class="center">✅ Cierre de Caja App</div>
+    </body>
+    </html>
+    """
+    return html
+
+# ----- Generar imagen PNG con resultados -----
+def generar_png_resultados(datos_local, datos_total, fecha_hora):
+    now_str = fecha_hora.strftime("%d/%m/%Y %H:%M:%S")
+    img = Image.new('RGB', (600, 800), color='white')
+    draw = ImageDraw.Draw(img)
+    try:
+        font_title = ImageFont.truetype("arial.ttf", 20)
+        font_normal = ImageFont.truetype("arial.ttf", 14)
+        font_bold = ImageFont.truetype("arialbd.ttf", 14)
+    except:
+        font_title = font_normal = font_bold = ImageFont.load_default()
+    y = 20
+    draw.text((20, y), "💰 CIERRE DE CAJA", fill='black', font=font_title)
+    y += 30
+    draw.text((20, y), now_str, fill='black', font=font_normal)
+    y += 30
+    draw.text((20, y), "🏪 CIERRE LOCAL", fill='black', font=font_bold)
+    y += 25
+    draw.text((20, y), f"Comandas físicas: {datos_local['com_fisicas']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"POS: {datos_local['pos']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Caja inicial: {datos_local['caja_ini']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Salidas dinero: {datos_local['salidas']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Efectivo contado: {datos_local['efectivo_cont']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Depósitos: {datos_local['depositos']:,.2f}", fill='black', font=font_normal)
+    y += 25
+    draw.text((20, y), f"Ventas efectivo: {datos_local['ventas_efectivo']:,.2f}", fill='black', font=font_bold)
+    y += 20
+    draw.text((20, y), f"Efectivo ideal: {datos_local['efectivo_ideal']:,.2f}", fill='black', font=font_bold)
+    y += 20
+    col = 'red' if datos_local['diferencia'] != 0 else 'green'
+    draw.text((20, y), f"Diferencia: {datos_local['diferencia']:,.2f}", fill=col, font=font_bold)
+    y += 20
+    draw.text((20, y), f"Estado final caja: {datos_local['estado_final']:,.2f}", fill='black', font=font_bold)
+    y += 35
+    draw.text((20, y), "💳 CIERRE TOTAL", fill='black', font=font_bold)
+    y += 25
+    draw.text((20, y), f"POS + ventas efectivo: {datos_total['pos_ventas']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Fondo inicial: {datos_total['fondo_ini']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Salidas totales: {datos_total['salidas']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Caja contada: {datos_total['caja_contada']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Pedidos Ya: {datos_total['pedidos_ya']:,.2f}", fill='black', font=font_normal)
+    y += 20
+    draw.text((20, y), f"Depósitos: {datos_total['depositos']:,.2f}", fill='black', font=font_normal)
+    y += 25
+    draw.text((20, y), f"Ventas totales: {datos_total['ventas_totales']:,.2f}", fill='black', font=font_bold)
+    y += 20
+    draw.text((20, y), f"Caja ideal: {datos_total['caja_ideal']:,.2f}", fill='black', font=font_bold)
+    y += 20
+    col2 = 'red' if datos_total['diferencia'] != 0 else 'green'
+    draw.text((20, y), f"Diferencia: {datos_total['diferencia']:,.2f}", fill=col2, font=font_bold)
+    y += 20
+    draw.text((20, y), f"Estado cuentas: {datos_total['estado_cuentas']:,.2f}", fill='black', font=font_bold)
+    y += 40
+    draw.text((20, y), "✅ Cierre de Caja App", fill='black', font=font_normal)
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf
+
+# ----- APP PRINCIPAL (VERSIÓN FUNCIONAL COMPROBADA) -----
 def main(page: ft.Page):
     page.title = "💰 Cierre de Caja"
     page.padding = 20
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    # ---- Selector de fecha manual (día, mes, año) ----
-    dia_dropdown = ft.Dropdown(
-        label="Día",
-        value="1",
-        options=[ft.dropdown.Option(str(i)) for i in range(1, 32)],
-        width=100
-    )
-    mes_dropdown = ft.Dropdown(
-        label="Mes",
-        value="1",
-        options=[ft.dropdown.Option(str(i)) for i in range(1, 13)],
-        width=100
-    )
-    year_dropdown = ft.Dropdown(
-        label="Año",
-        value=str(date.today().year),
-        options=[ft.dropdown.Option(str(y)) for y in range(2020, 2031)],
-        width=100
-    )
-
-    fecha_actual = date.today()
-    fecha_text = ft.Text(fecha_actual.strftime("%d/%m/%Y"), size=16)
-
-    def actualizar_fecha_manual(e):
-        try:
-            dia = int(dia_dropdown.value)
-            mes = int(mes_dropdown.value)
-            year = int(year_dropdown.value)
-            # Validar fecha (por si el día no existe en ese mes, ajustar)
-            fecha_temp = date(year, mes, min(dia, 28))  # provisional
-            # Hacer la fecha correcta con calendar
-            import calendar
-            ultimo_dia = calendar.monthrange(year, mes)[1]
-            dia_correcto = min(dia, ultimo_dia)
-            fecha_sel = date(year, mes, dia_correcto)
-            nonlocal fecha_actual
-            fecha_actual = fecha_sel
-            fecha_text.value = fecha_actual.strftime("%d/%m/%Y")
-            # Sincronizar los dropdowns por si se corrigió el día
-            if str(dia_correcto) != dia_dropdown.value:
-                dia_dropdown.value = str(dia_correcto)
-            page.update()
-        except:
-            pass
-
-    dia_dropdown.on_change = actualizar_fecha_manual
-    mes_dropdown.on_change = actualizar_fecha_manual
-    year_dropdown.on_change = actualizar_fecha_manual
-
-    # ---- Campos locales ----
+    # Campos locales
     com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     pos = ft.TextField(label="POS", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     caja_ini = ft.TextField(label="Caja inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -78,7 +161,6 @@ def main(page: ft.Page):
     efectivo_cont = ft.TextField(label="Efectivo contado", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # ---- Campos totales ----
     pos_ventas = ft.TextField(label="POS + ventas efectivo", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     fondo_ini = ft.TextField(label="Fondo inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     salidas_total = ft.TextField(label="Salidas totales", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -86,7 +168,7 @@ def main(page: ft.Page):
     pedidos_ya = ft.TextField(label="Pedidos Ya", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos_total = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # ---- Resultados ----
+    # Resultados
     local_ventas = ft.Text("0.00")
     local_ideal = ft.Text("0.00")
     local_diferencia = ft.Text("0.00")
@@ -96,8 +178,7 @@ def main(page: ft.Page):
     total_diferencia = ft.Text("0.00")
     total_estado = ft.Text("0.00")
 
-    def actualizar_todo(e):
-        # Local
+    def actualizar(e):
         try:
             cf = float(com_fisicas.value or 0)
             p = float(pos.value or 0)
@@ -111,9 +192,7 @@ def main(page: ft.Page):
             local_diferencia.value = f"{d:,.2f}"
             local_diferencia.color = ft.Colors.RED if d != 0 else ft.Colors.GREEN
             local_estado.value = f"{e:,.2f}"
-        except:
-            pass
-        # Total
+        except: pass
         try:
             pv = float(pos_ventas.value or 0)
             fi = float(fondo_ini.value or 0)
@@ -127,13 +206,12 @@ def main(page: ft.Page):
             total_diferencia.value = f"{dt:,.2f}"
             total_diferencia.color = ft.Colors.RED if dt != 0 else ft.Colors.GREEN
             total_estado.value = f"{et:,.2f}"
-        except:
-            pass
+        except: pass
         page.update()
 
     for campo in [com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos,
                   pos_ventas, fondo_ini, salidas_total, caja_contada, pedidos_ya, depositos_total]:
-        campo.on_change = actualizar_todo
+        campo.on_change = actualizar
 
     def reset_local(e):
         com_fisicas.value = "0"
@@ -142,7 +220,7 @@ def main(page: ft.Page):
         salidas.value = "0"
         efectivo_cont.value = "0"
         depositos.value = "0"
-        actualizar_todo(e)
+        actualizar(e)
 
     def reset_total(e):
         pos_ventas.value = "0"
@@ -151,10 +229,10 @@ def main(page: ft.Page):
         caja_contada.value = "0"
         pedidos_ya.value = "0"
         depositos_total.value = "0"
-        actualizar_todo(e)
+        actualizar(e)
 
     def copiar_resultados(e):
-        texto = f"""💰 CIERRE DE CAJA - {fecha_actual.strftime('%d/%m/%Y')} {datetime.now().strftime('%H:%M:%S')}
+        texto = f"""💰 CIERRE DE CAJA - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
 
 🏪 LOCAL
 Comandas físicas: {com_fisicas.value}
@@ -181,15 +259,84 @@ Diferencia: {total_diferencia.value}
 Estado cuentas: {total_estado.value}
 """
         page.set_clipboard(texto)
-        page.snack_bar = ft.SnackBar(ft.Text("Resultados copiados al portapapeles"))
+        page.snack_bar = ft.SnackBar(ft.Text("Resultados copiados"))
         page.snack_bar.open = True
         page.update()
 
-    # ---- Interfaz (con selector manual de fecha) ----
+    def exportar_png(e):
+        cf = float(com_fisicas.value or 0)
+        p = float(pos.value or 0)
+        ci = float(caja_ini.value or 0)
+        sal = float(salidas.value or 0)
+        ec = float(efectivo_cont.value or 0)
+        dep = float(depositos.value or 0)
+        v_ef, i_ef, d_local, e_local = calcular_local(cf, p, ci, sal, ec, dep)
+        pv = float(pos_ventas.value or 0)
+        fi = float(fondo_ini.value or 0)
+        st = float(salidas_total.value or 0)
+        cc = float(caja_contada.value or 0)
+        py = float(pedidos_ya.value or 0)
+        dt = float(depositos_total.value or 0)
+        vt, it, d_total, e_total = calcular_total(pv, fi, st, cc, py, dt)
+        datos_local = {
+            'com_fisicas': cf, 'pos': p, 'caja_ini': ci, 'salidas': sal,
+            'efectivo_cont': ec, 'depositos': dep,
+            'ventas_efectivo': v_ef, 'efectivo_ideal': i_ef,
+            'diferencia': d_local, 'estado_final': e_local
+        }
+        datos_total = {
+            'pos_ventas': pv, 'fondo_ini': fi, 'salidas': st,
+            'caja_contada': cc, 'pedidos_ya': py, 'depositos': dt,
+            'ventas_totales': vt, 'caja_ideal': it,
+            'diferencia': d_total, 'estado_cuentas': e_total
+        }
+        fecha_hora = datetime.now()
+        img_buffer = generar_png_resultados(datos_local, datos_total, fecha_hora)
+        with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp:
+            tmp.write(img_buffer.getvalue())
+            tmp_path = tmp.name
+        page.launch_url(f"file://{tmp_path}")
+        page.snack_bar = ft.SnackBar(ft.Text("PNG generado. Se abrirá en el navegador."))
+        page.snack_bar.open = True
+        page.update()
+
+    def imprimir_ticket(e):
+        cf = float(com_fisicas.value or 0)
+        p = float(pos.value or 0)
+        ci = float(caja_ini.value or 0)
+        sal = float(salidas.value or 0)
+        ec = float(efectivo_cont.value or 0)
+        dep = float(depositos.value or 0)
+        v_ef, i_ef, d_local, e_local = calcular_local(cf, p, ci, sal, ec, dep)
+        pv = float(pos_ventas.value or 0)
+        fi = float(fondo_ini.value or 0)
+        st = float(salidas_total.value or 0)
+        cc = float(caja_contada.value or 0)
+        py = float(pedidos_ya.value or 0)
+        dt = float(depositos_total.value or 0)
+        vt, it, d_total, e_total = calcular_total(pv, fi, st, cc, py, dt)
+        datos_local = {
+            'com_fisicas': cf, 'pos': p, 'caja_ini': ci, 'salidas': sal,
+            'efectivo_cont': ec, 'depositos': dep,
+            'ventas_efectivo': v_ef, 'efectivo_ideal': i_ef,
+            'diferencia': d_local, 'estado_final': e_local
+        }
+        datos_total = {
+            'pos_ventas': pv, 'fondo_ini': fi, 'salidas': st,
+            'caja_contada': cc, 'pedidos_ya': py, 'depositos': dt,
+            'ventas_totales': vt, 'caja_ideal': it,
+            'diferencia': d_total, 'estado_cuentas': e_total
+        }
+        fecha_hora = datetime.now()
+        html = generar_html_ticket(datos_local, datos_total, fecha_hora)
+        data_uri = "data:text/html;charset=utf-8," + urllib.parse.quote(html)
+        page.launch_url(data_uri)
+        page.snack_bar = ft.SnackBar(ft.Text("Ticket generado. Se abrirá en el navegador."))
+        page.snack_bar.open = True
+        page.update()
+
+    # Interfaz (sin ningún selector de fecha, solo botones)
     page.add(
-        ft.Row([ft.Text("Seleccionar fecha: "), dia_dropdown, mes_dropdown, year_dropdown]),
-        ft.Text("Fecha actual: "), fecha_text,
-        ft.Divider(),
         ft.Text("💰 CIERRE DE CAJA", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(),
         ft.Text("🏪 LOCAL", size=18, weight=ft.FontWeight.BOLD),
@@ -210,8 +357,12 @@ Estado cuentas: {total_estado.value}
         ft.Row([ft.Text("Diferencia:"), total_diferencia]),
         ft.Row([ft.Text("Estado final de cuentas:"), total_estado]),
         ft.Divider(),
-        ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY),
+        ft.Row([
+            ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY),
+            ft.ElevatedButton("🖼️ Exportar PNG", on_click=exportar_png, icon=ft.icons.IMAGE),
+            ft.ElevatedButton("🧾 Imprimir ticket", on_click=imprimir_ticket, icon=ft.icons.PRINT),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=10),
     )
-    actualizar_todo(None)
+    actualizar(None)
 
 ft.app(target=main)
