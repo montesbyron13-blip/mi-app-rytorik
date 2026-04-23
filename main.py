@@ -21,27 +21,54 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    # ---- Fecha seleccionada ----
+    # ---- Selector de fecha manual (día, mes, año) ----
+    dia_dropdown = ft.Dropdown(
+        label="Día",
+        value="1",
+        options=[ft.dropdown.Option(str(i)) for i in range(1, 32)],
+        width=100
+    )
+    mes_dropdown = ft.Dropdown(
+        label="Mes",
+        value="1",
+        options=[ft.dropdown.Option(str(i)) for i in range(1, 13)],
+        width=100
+    )
+    year_dropdown = ft.Dropdown(
+        label="Año",
+        value=str(date.today().year),
+        options=[ft.dropdown.Option(str(y)) for y in range(2020, 2031)],
+        width=100
+    )
+
     fecha_actual = date.today()
     fecha_text = ft.Text(fecha_actual.strftime("%d/%m/%Y"), size=16)
 
-    # ---- Selector de fecha (DatePicker) ----
-    def fecha_cambiada(e):
-        nonlocal fecha_actual
-        if date_picker.value:
-            fecha_actual = date_picker.value
+    def actualizar_fecha_manual(e):
+        try:
+            dia = int(dia_dropdown.value)
+            mes = int(mes_dropdown.value)
+            year = int(year_dropdown.value)
+            # Validar fecha (por si el día no existe en ese mes, ajustar)
+            fecha_temp = date(year, mes, min(dia, 28))  # provisional
+            # Hacer la fecha correcta con calendar
+            import calendar
+            ultimo_dia = calendar.monthrange(year, mes)[1]
+            dia_correcto = min(dia, ultimo_dia)
+            fecha_sel = date(year, mes, dia_correcto)
+            nonlocal fecha_actual
+            fecha_actual = fecha_sel
             fecha_text.value = fecha_actual.strftime("%d/%m/%Y")
+            # Sincronizar los dropdowns por si se corrigió el día
+            if str(dia_correcto) != dia_dropdown.value:
+                dia_dropdown.value = str(dia_correcto)
             page.update()
+        except:
+            pass
 
-    date_picker = ft.DatePicker(
-        first_date=datetime(2020, 1, 1),
-        last_date=datetime(2030, 12, 31),
-        on_change=fecha_cambiada
-    )
-    page.overlay.append(date_picker)
-
-    def mostrar_calendario(e):
-        date_picker.pick_date()
+    dia_dropdown.on_change = actualizar_fecha_manual
+    mes_dropdown.on_change = actualizar_fecha_manual
+    year_dropdown.on_change = actualizar_fecha_manual
 
     # ---- Campos locales ----
     com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -158,9 +185,10 @@ Estado cuentas: {total_estado.value}
         page.snack_bar.open = True
         page.update()
 
-    # ---- Interfaz ----
+    # ---- Interfaz (con selector manual de fecha) ----
     page.add(
-        ft.Row([ft.ElevatedButton("📅 Seleccionar fecha", on_click=mostrar_calendario), ft.Text("Fecha:"), fecha_text]),
+        ft.Row([ft.Text("Seleccionar fecha: "), dia_dropdown, mes_dropdown, year_dropdown]),
+        ft.Text("Fecha actual: "), fecha_text,
         ft.Divider(),
         ft.Text("💰 CIERRE DE CAJA", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(),
