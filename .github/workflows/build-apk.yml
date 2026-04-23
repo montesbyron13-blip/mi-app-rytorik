@@ -11,22 +11,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: Install flet
-        run: pip install flet
+        run: pip install flet==0.22.0
 
-      - name: Setup Flutter (versión requerida por Flet)
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter (necesario para Flet)
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.41.4'
+          flutter-version: '3.16.9'
           channel: 'stable'
 
-      - name: Build APK with Flet (modo no interactivo)
-        run: flet build apk --yes
+      - name: Build APK with Flet
+        run: flet build apk --verbose
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
