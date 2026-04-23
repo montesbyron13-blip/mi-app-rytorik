@@ -1,6 +1,8 @@
 import flet as ft
 from datetime import datetime
+import urllib.parse
 
+# ---------- Funciones de cálculo ----------
 def calcular_local(com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos):
     ventas_efectivo = com_fisicas - pos
     efectivo_ideal = ventas_efectivo + caja_ini - salidas
@@ -23,11 +25,80 @@ def safe_float(value):
     except ValueError:
         return 0.0
 
+# ---------- Generar ticket HTML ----------
+def generar_html_ticket(datos_local, datos_total, fecha_hora):
+    now_str = fecha_hora.strftime("%d/%m/%Y %H:%M:%S")
+    html = f"""
+    <html>
+    <head><meta charset="UTF-8"><style>
+        @media print {{ body {{ margin: 0; padding: 0; }} }}
+        body {{ font-family: monospace; font-size: 12px; width: 80mm; padding: 5mm; margin: 0 auto; }}
+        .center {{ text-align: center; }}
+        .line {{ border-top: 1px dashed #000; margin: 5px 0; }}
+        table {{ width: 100%; }}
+        td {{ padding: 2px 0; }}
+        .right {{ text-align: right; }}
+        .title {{ font-weight: bold; font-size: 14px; margin: 5px 0; }}
+    </style></head>
+    <body>
+        <div class="center"><b>💰 CIERRE DE CAJA</b><br/>{now_str}</div>
+        <div class="line"></div>
+        <div class="title">🏪 CIERRE LOCAL</div>
+        <tr>
+            <tr><td>Comandas físicas: </td><td class="right">{datos_local['com_fisicas']:,.2f} </td> </tr>
+            <tr><td>POS:  </td><td class="right">{datos_local['pos']:,.2f} </td> </tr>
+            <tr><td>Caja inicial:  </td><td class="right">{datos_local['caja_ini']:,.2f} </td> </tr>
+            <tr><td>Salidas dinero:  </td><td class="right">{datos_local['salidas']:,.2f} </td> </tr>
+            <tr><td>Efectivo contado:  </td><td class="right">{datos_local['efectivo_cont']:,.2f} </td> </tr>
+            <tr><td>Depósitos:  </td><td class="right">{datos_local['depositos']:,.2f} </td> </tr>
+        </table>
+        <div class="line"></div>
+        <table>
+            <tr><td><b>Ventas efectivo:</b>  </td><td class="right"><b>{datos_local['ventas_efectivo']:,.2f}</b> </td> </tr>
+            <tr><td><b>Efectivo ideal:</b>  </td><td class="right"><b>{datos_local['efectivo_ideal']:,.2f}</b> </td> </tr>
+            <tr><td><b>Diferencia:</b>  </td><td class="right"><b>{datos_local['diferencia']:,.2f}</b> </td> </tr>
+            <tr><td><b>Estado final caja:</b>  </td><td class="right"><b>{datos_local['estado_final']:,.2f}</b> </td> </tr>
+        </table>
+        <div class="line"></div>
+        <div class="title">💳 CIERRE TOTAL</div>
+        <table>
+            <tr><td>POS + ventas efectivo:  </td><td class="right">{datos_total['pos_ventas']:,.2f} </td> </tr>
+            <tr><td>Fondo inicial:  </td><td class="right">{datos_total['fondo_ini']:,.2f} </td> </tr>
+            <tr><td>Salidas totales:  </td><td class="right">{datos_total['salidas']:,.2f} </td> </tr>
+            <tr><td>Estado cuentas:  </td><td class="right">{datos_total['estado_cuentas']:,.2f} </td> </tr>
+            <tr><td>Pedidos Ya:  </td><td class="right">{datos_total['pedidos_ya']:,.2f} </td> </tr>
+            <tr><td>Retiro de fondos:  </td><td class="right">{datos_total['retiro_fondos']:,.2f} </td> </tr>
+        </table>
+        <div class="line"></div>
+        <table>
+            <tr><td><b>Ventas totales:</b>  </td><td class="right"><b>{datos_total['ventas_totales']:,.2f}</b> </td> </tr>
+            <tr><td><b>Caja ideal:</b>  </td><td class="right"><b>{datos_total['caja_ideal']:,.2f}</b> </td> </tr>
+            <tr><td><b>Diferencia:</b>  </td><td class="right"><b>{datos_total['diferencia']:,.2f}</b> </td> </tr>
+            <tr><td><b>Estado final de cuentas:</b>  </td><td class="right"><b>{datos_total['estado_final_cuentas']:,.2f}</b> </td> </tr>
+        </table>
+        <div class="line"></div>
+        <div class="center">✅ RytoriK 🔮 - Cierre de Caja</div>
+    </body>
+    </html>
+    """
+    return html
+
+# ---------- APP PRINCIPAL ----------
 def main(page: ft.Page):
-    page.title = "💰 Cierre de Caja"
+    page.title = "RytoriK 🔮 - Cierre de Caja"  # Título en la barra superior (con emoji)
     page.padding = 20
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
+
+    # ========== ENCABEZADO CENTRADO ==========
+    header = ft.Column(
+        [
+            ft.Text("RytoriK 🔮", size=32, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+            ft.Text("Cierre de Caja", size=18, weight=ft.FontWeight.NORMAL, text_align=ft.TextAlign.CENTER),
+        ],
+        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        spacing=5,
+    )
 
     # --- Sección Local ---
     com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -37,11 +108,11 @@ def main(page: ft.Page):
     efectivo_cont = ft.TextField(label="Efectivo contado", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # --- Sección Total (con nombres corregidos) ---
+    # --- Sección Total ---
     pos_ventas = ft.TextField(label="POS + ventas efectivo", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     fondo_ini = ft.TextField(label="Fondo inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     salidas_total = ft.TextField(label="Salidas totales", value="0", keyboard_type=ft.KeyboardType.NUMBER)
-    estado_cuentas = ft.TextField(label="Estado cuentas", value="0", keyboard_type=ft.KeyboardType.NUMBER)   # <-- Cambiado: solo "Estado cuentas"
+    estado_cuentas = ft.TextField(label="Estado cuentas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     pedidos_ya = ft.TextField(label="Pedidos Ya", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     retiro_fondos = ft.TextField(label="Retiro de fondos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
@@ -58,7 +129,7 @@ def main(page: ft.Page):
     total_estado_final_cuentas = ft.Text("0.00")
 
     def actualizar(e):
-        # --- Local ---
+        # Local
         cf = safe_float(com_fisicas.value)
         p = safe_float(pos.value)
         ci = safe_float(caja_ini.value)
@@ -72,11 +143,11 @@ def main(page: ft.Page):
         local_diferencia.color = ft.Colors.RED if d != 0 else ft.Colors.GREEN
         local_estado.value = f"{e:,.2f}"
 
-        # --- Total ---
+        # Total
         pv = safe_float(pos_ventas.value)
         fi = safe_float(fondo_ini.value)
         st = safe_float(salidas_total.value)
-        ec = safe_float(estado_cuentas.value)   # el valor ingresado (saldos bancarios)
+        ec = safe_float(estado_cuentas.value)
         py = safe_float(pedidos_ya.value)
         rf = safe_float(retiro_fondos.value)
         vt, it, dt, ef = calcular_total(pv, fi, st, ec, py, rf)
@@ -88,7 +159,6 @@ def main(page: ft.Page):
 
         page.update()
 
-    # Asignar eventos
     for campo in [com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos,
                   pos_ventas, fondo_ini, salidas_total, estado_cuentas, pedidos_ya, retiro_fondos]:
         campo.on_change = actualizar
@@ -143,9 +213,46 @@ Estado final de cuentas: {total_estado_final_cuentas.value}
         page.snack_bar.open = True
         page.update()
 
-    # Interfaz
+    def ticket(e):
+        cf = safe_float(com_fisicas.value)
+        p = safe_float(pos.value)
+        ci = safe_float(caja_ini.value)
+        sal = safe_float(salidas.value)
+        ec_local = safe_float(efectivo_cont.value)
+        dep = safe_float(depositos.value)
+        v_ef, i_ef, d_local, e_local = calcular_local(cf, p, ci, sal, ec_local, dep)
+
+        pv = safe_float(pos_ventas.value)
+        fi = safe_float(fondo_ini.value)
+        st = safe_float(salidas_total.value)
+        ec = safe_float(estado_cuentas.value)
+        py = safe_float(pedidos_ya.value)
+        rf = safe_float(retiro_fondos.value)
+        vt, it, d_total, e_total = calcular_total(pv, fi, st, ec, py, rf)
+
+        datos_local = {
+            'com_fisicas': cf, 'pos': p, 'caja_ini': ci, 'salidas': sal,
+            'efectivo_cont': ec_local, 'depositos': dep,
+            'ventas_efectivo': v_ef, 'efectivo_ideal': i_ef,
+            'diferencia': d_local, 'estado_final': e_local
+        }
+        datos_total = {
+            'pos_ventas': pv, 'fondo_ini': fi, 'salidas': st,
+            'estado_cuentas': ec, 'pedidos_ya': py, 'retiro_fondos': rf,
+            'ventas_totales': vt, 'caja_ideal': it,
+            'diferencia': d_total, 'estado_final_cuentas': e_total
+        }
+        fecha_hora = datetime.now()
+        html = generar_html_ticket(datos_local, datos_total, fecha_hora)
+        data_uri = "data:text/html;charset=utf-8," + urllib.parse.quote(html)
+        page.launch_url(data_uri)
+        page.snack_bar = ft.SnackBar(ft.Text("Ticket generado. Se abrirá en el navegador."))
+        page.snack_bar.open = True
+        page.update()
+
+    # --- Interfaz de usuario con encabezado centrado ---
     page.add(
-        ft.Text("💰 CIERRE DE CAJA", size=24, weight=ft.FontWeight.BOLD),
+        header,  # Título centrado
         ft.Divider(),
         ft.Text("🏪 CIERRE LOCAL", size=18, weight=ft.FontWeight.BOLD),
         com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos,
@@ -165,7 +272,10 @@ Estado final de cuentas: {total_estado_final_cuentas.value}
         ft.Row([ft.Text("Diferencia:"), total_diferencia]),
         ft.Row([ft.Text("Estado final de cuentas:"), total_estado_final_cuentas]),
         ft.Divider(),
-        ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY),
+        ft.Row([
+            ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY),
+            ft.ElevatedButton("🧾 Imprimir ticket", on_click=ticket, icon=ft.icons.PRINT),
+        ], alignment=ft.MainAxisAlignment.CENTER, spacing=20),
     )
     actualizar(None)
 
