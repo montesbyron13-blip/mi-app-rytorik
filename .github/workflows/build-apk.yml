@@ -27,9 +27,9 @@ jobs:
       - name: Install Flet
         run: pip install flet==0.22.0
       - name: Build APK
-        run: flet build apk
+        run: flet build apk --app-name "RytoriK"  # <-- sin emoji
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
+          name: RytoriK-app
           path: build/apk/*.apk
