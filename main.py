@@ -19,7 +19,7 @@ def safe_float(value):
     if value is None or value == "":
         return 0.0
     try:
-        return float(str(value).replace(',', '.').strip())
+        return float(value)
     except ValueError:
         return 0.0
 
@@ -29,32 +29,21 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    # Función para crear campos con eventos automáticos
-    def crear_campo(label):
-        return ft.TextField(
-            label=label,
-            value="0",
-            keyboard_type=ft.KeyboardType.NUMBER,
-            on_change=actualizar,
-            on_blur=actualizar,
-            on_submit=actualizar
-        )
-
     # Campos locales
-    com_fisicas = crear_campo("Comandas físicas")
-    pos = crear_campo("POS")
-    caja_ini = crear_campo("Caja inicial")
-    salidas = crear_campo("Salidas dinero")
-    efectivo_cont = crear_campo("Efectivo contado")
-    depositos = crear_campo("Depósitos")
+    com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    pos = ft.TextField(label="POS", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    caja_ini = ft.TextField(label="Caja inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    salidas = ft.TextField(label="Salidas dinero", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    efectivo_cont = ft.TextField(label="Efectivo contado", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    depositos = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
 
     # Campos totales
-    pos_ventas = crear_campo("POS + ventas efectivo")
-    fondo_ini = crear_campo("Fondo inicial")
-    salidas_total = crear_campo("Salidas totales")
-    estado_cuentas = crear_campo("Estado cuentas")
-    pedidos_ya = crear_campo("Pedidos Ya")
-    retiro_fondos = crear_campo("Retiro de fondos")
+    pos_ventas = ft.TextField(label="POS + ventas efectivo", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    fondo_ini = ft.TextField(label="Fondo inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    salidas_total = ft.TextField(label="Salidas totales", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    estado_cuentas = ft.TextField(label="Estado cuentas", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    pedidos_ya = ft.TextField(label="Pedidos Ya", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
+    retiro_fondos = ft.TextField(label="Retiro de fondos", value="0", keyboard_type=ft.KeyboardType.NUMBER, on_change=actualizar)
 
     # Resultados
     local_ventas = ft.Text("0.00")
@@ -66,7 +55,7 @@ def main(page: ft.Page):
     total_diferencia = ft.Text("0.00")
     total_estado_final_cuentas = ft.Text("0.00")
 
-    def actualizar(e=None):
+    def actualizar(e):
         # Local
         cf = safe_float(com_fisicas.value)
         p = safe_float(pos.value)
@@ -85,15 +74,16 @@ def main(page: ft.Page):
         pv = safe_float(pos_ventas.value)
         fi = safe_float(fondo_ini.value)
         st = safe_float(salidas_total.value)
-        ec_total = safe_float(estado_cuentas.value)
+        ec = safe_float(estado_cuentas.value)
         py = safe_float(pedidos_ya.value)
         rf = safe_float(retiro_fondos.value)
-        vt, it, dt, ef = calcular_total(pv, fi, st, ec_total, py, rf)
+        vt, it, dt, ef = calcular_total(pv, fi, st, ec, py, rf)
         total_ventas.value = f"{vt:,.2f}"
         total_ideal.value = f"{it:,.2f}"
         total_diferencia.value = f"{dt:,.2f}"
         total_diferencia.color = ft.Colors.RED if dt != 0 else ft.Colors.GREEN
         total_estado_final_cuentas.value = f"{ef:,.2f}"
+
         page.update()
 
     def reset_local(e):
@@ -103,7 +93,7 @@ def main(page: ft.Page):
         salidas.value = "0"
         efectivo_cont.value = "0"
         depositos.value = "0"
-        actualizar()
+        actualizar(e)
 
     def reset_total(e):
         pos_ventas.value = "0"
@@ -112,7 +102,7 @@ def main(page: ft.Page):
         estado_cuentas.value = "0"
         pedidos_ya.value = "0"
         retiro_fondos.value = "0"
-        actualizar()
+        actualizar(e)
 
     def copiar_resultados(e):
         texto = f"""💰 CIERRE DE CAJA - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
@@ -146,7 +136,7 @@ Estado final de cuentas: {total_estado_final_cuentas.value}
         page.snack_bar.open = True
         page.update()
 
-    # Interfaz (sin botón recalcular)
+    # Interfaz
     page.add(
         ft.Text("💰 CIERRE DE CAJA", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(),
@@ -161,13 +151,15 @@ Estado final de cuentas: {total_estado_final_cuentas.value}
         ft.Divider(),
         ft.Text("💳 CIERRE TOTAL", size=18, weight=ft.FontWeight.BOLD),
         pos_ventas, fondo_ini, salidas_total, estado_cuentas, pedidos_ya, retiro_fondos,
-        ft.Row([ft.ElevatedButton("🔄 Resetear Total", on_click=reset_total), ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY)], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+        ft.ElevatedButton("🔄 Resetear Total", on_click=reset_total),
         ft.Text("📊 Resultados Totales", size=16, weight=ft.FontWeight.BOLD),
         ft.Row([ft.Text("Ventas totales:"), total_ventas]),
         ft.Row([ft.Text("Caja ideal:"), total_ideal]),
         ft.Row([ft.Text("Diferencia:"), total_diferencia]),
         ft.Row([ft.Text("Estado final de cuentas:"), total_estado_final_cuentas]),
+        ft.Divider(),
+        ft.ElevatedButton("📋 Copiar resultados", on_click=copiar_resultados, icon=ft.icons.CONTENT_COPY),
     )
-    actualizar()
+    actualizar(None)
 
 ft.app(target=main)
