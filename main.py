@@ -1,5 +1,5 @@
 import flet as ft
-from datetime import datetime
+from datetime import datetime, date
 
 def calcular_local(com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos):
     ventas_efectivo = com_fisicas - pos
@@ -21,18 +21,29 @@ def main(page: ft.Page):
     page.scroll = ft.ScrollMode.AUTO
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER
 
-    # --- Reloj en vivo ---
-    reloj_text = ft.Text("", size=18, weight=ft.FontWeight.BOLD)
+    # ---- Fecha seleccionada ----
+    fecha_actual = date.today()
+    fecha_text = ft.Text(fecha_actual.strftime("%d/%m/%Y"), size=16)
 
-    def actualizar_reloj(e):
-        ahora = datetime.now()
-        reloj_text.value = f"🕒 {ahora.strftime('%d/%m/%Y %H:%M:%S')}"
-        page.update()
+    # ---- Selector de fecha (DatePicker) ----
+    def fecha_cambiada(e):
+        nonlocal fecha_actual
+        if date_picker.value:
+            fecha_actual = date_picker.value
+            fecha_text.value = fecha_actual.strftime("%d/%m/%Y")
+            page.update()
 
-    # Intervalo de 1 segundo (1000 ms)
-    page.add_interval(1000, actualizar_reloj)
+    date_picker = ft.DatePicker(
+        first_date=datetime(2020, 1, 1),
+        last_date=datetime(2030, 12, 31),
+        on_change=fecha_cambiada
+    )
+    page.overlay.append(date_picker)
 
-    # --- Campos locales ---
+    def mostrar_calendario(e):
+        date_picker.pick_date()
+
+    # ---- Campos locales ----
     com_fisicas = ft.TextField(label="Comandas físicas", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     pos = ft.TextField(label="POS", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     caja_ini = ft.TextField(label="Caja inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -40,7 +51,7 @@ def main(page: ft.Page):
     efectivo_cont = ft.TextField(label="Efectivo contado", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # --- Campos totales ---
+    # ---- Campos totales ----
     pos_ventas = ft.TextField(label="POS + ventas efectivo", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     fondo_ini = ft.TextField(label="Fondo inicial", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     salidas_total = ft.TextField(label="Salidas totales", value="0", keyboard_type=ft.KeyboardType.NUMBER)
@@ -48,7 +59,7 @@ def main(page: ft.Page):
     pedidos_ya = ft.TextField(label="Pedidos Ya", value="0", keyboard_type=ft.KeyboardType.NUMBER)
     depositos_total = ft.TextField(label="Depósitos", value="0", keyboard_type=ft.KeyboardType.NUMBER)
 
-    # --- Resultados ---
+    # ---- Resultados ----
     local_ventas = ft.Text("0.00")
     local_ideal = ft.Text("0.00")
     local_diferencia = ft.Text("0.00")
@@ -93,7 +104,6 @@ def main(page: ft.Page):
             pass
         page.update()
 
-    # Asignar evento a todos los campos
     for campo in [com_fisicas, pos, caja_ini, salidas, efectivo_cont, depositos,
                   pos_ventas, fondo_ini, salidas_total, caja_contada, pedidos_ya, depositos_total]:
         campo.on_change = actualizar_todo
@@ -117,7 +127,7 @@ def main(page: ft.Page):
         actualizar_todo(e)
 
     def copiar_resultados(e):
-        texto = f"""💰 CIERRE DE CAJA - {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
+        texto = f"""💰 CIERRE DE CAJA - {fecha_actual.strftime('%d/%m/%Y')} {datetime.now().strftime('%H:%M:%S')}
 
 🏪 LOCAL
 Comandas físicas: {com_fisicas.value}
@@ -148,9 +158,9 @@ Estado cuentas: {total_estado.value}
         page.snack_bar.open = True
         page.update()
 
-    # --- Construcción de la interfaz (igual que la intermedia, pero añadiendo el reloj al inicio) ---
+    # ---- Interfaz ----
     page.add(
-        ft.Row([reloj_text], alignment=ft.MainAxisAlignment.CENTER),
+        ft.Row([ft.ElevatedButton("📅 Seleccionar fecha", on_click=mostrar_calendario), ft.Text("Fecha:"), fecha_text]),
         ft.Divider(),
         ft.Text("💰 CIERRE DE CAJA", size=24, weight=ft.FontWeight.BOLD),
         ft.Divider(),
